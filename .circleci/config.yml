@@ -1,218 +1,85 @@
 version: 2
-
-aliases:
-  - &defaults
+jobs:
+  build:
     docker:
-      - image: circleci/ruby:2.6-stretch-node
-        environment: &ruby_environment
-          BUNDLE_APP_CONFIG: ./.bundle/
-          DB_HOST: localhost
-          DB_USER: root
-          RAILS_ENV: test
-          PARALLEL_TEST_PROCESSORS: 4
-          ALLOW_NOPAM: true
-          CONTINUOUS_INTEGRATION: true
-          DISABLE_SIMPLECOV: true
-          PAM_ENABLED: true
-          PAM_DEFAULT_SERVICE: pam_test
-          PAM_CONTROLLED_SERVICE: pam_test_controlled
-    working_directory: ~/projects/mastodon/
-
-  - &attach_workspace
-    attach_workspace:
-      at: ~/projects/
-
-  - &persist_to_workspace
-    persist_to_workspace:
-      root: ~/projects/
-      paths:
-        - ./mastodon/
-
-  - &restore_ruby_dependencies
-    restore_cache:
-      keys:
-        - v2-ruby-dependencies-{{ checksum "/tmp/.ruby-version" }}-{{ checksum "Gemfile.lock" }}
-        - v2-ruby-dependencies-{{ checksum "/tmp/.ruby-version" }}-
-        - v2-ruby-dependencies-
-
-  - &install_steps
+      - image: circleci/openjdk:8u222-jdk-stretch-node-browsers
+    working_directory: ~/repo
+    environment:
+      GRADLE_OPTS: -Xmx3g
+      JVM_OPTS: -Xmx3g
     steps:
       - checkout
-      - *attach_workspace
 
       - restore_cache:
           keys:
-            - v1-node-dependencies-{{ checksum "yarn.lock" }}
-            - v1-node-dependencies-
-      - run: yarn install --frozen-lockfile
+            - v1-dependencies-{{ checksum "build.gradle" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+  test-java:
+    docker:
+      - image: circleci/openjdk:8u222-jdk-stretch-node-browsers
+      steps:
+      - run: ./gradlew test --no-daemon -Dorg.gradle.jvmargs="-Xmx1536m -XX:+HeapDumpOnOutOfMemoryError -XX:+PrintGCDetails" --max-workers 20
+      - run:
+          name: Save test results
+          command: |
+            mkdir -p ~/test-results/junit/
+            find . -type f -regex ".*/build/test-results/test/.*xml" -exec cp {} ~/test-results/junit/ \;
+          when: always
+      - store_test_results:
+          path: ~/test-results/junit
+      - store_artifacts:
+          path: ~/test-results/junit
+
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "package.json" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+  test-yarn:
+    docker:
+      - image: circleci/openjdk:8u222-jdk-stretch-node-browsers
+      steps:
+      - run: yarn install
+      - run: yarn test
       - save_cache:
-          key: v1-node-dependencies-{{ checksum "yarn.lock" }}
           paths:
-            - ./node_modules/
-
-      - *persist_to_workspace
-
-  - &install_system_dependencies
-      run:
-        name: Install system dependencies
-        command: |
-          sudo apt-get update
-          sudo apt-get install -y libicu-dev libidn11-dev libprotobuf-dev protobuf-compiler
-
-  - &install_ruby_dependencies
-      steps:
-        - *attach_workspace
-
-        - *install_system_dependencies
-
-        - run: ruby -e 'puts RUBY_VERSION' | tee /tmp/.ruby-version
-        - *restore_ruby_dependencies
-        - run: bundle install --clean --jobs 16 --path ./vendor/bundle/ --retry 3 --with pam_authentication --without development production && bundle clean
-        - save_cache:
-            key: v2-ruby-dependencies-{{ checksum "/tmp/.ruby-version" }}-{{ checksum "Gemfile.lock" }}
-            paths:
-              - ./.bundle/
-              - ./vendor/bundle/
-        - persist_to_workspace:
-            root: ~/projects/
-            paths:
-                - ./mastodon/.bundle/
-                - ./mastodon/vendor/bundle/
-
-  - &test_steps
-      steps:
-        - *attach_workspace
-
-        - *install_system_dependencies
-        - run: sudo apt-get install -y ffmpeg
-
-        - run:
-            name: Prepare Tests
-            command: ./bin/rails parallel:create parallel:load_schema parallel:prepare
-        - run:
-            name: Run Tests
-            command: ./bin/retry bundle exec parallel_test ./spec/ --group-by filesize --type rspec
-
-jobs:
-  install:
-    <<: *defaults
-    <<: *install_steps
-
-  install-ruby2.6:
-    <<: *defaults
-    <<: *install_ruby_dependencies
-
-  install-ruby2.5:
-    <<: *defaults
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+#deployment
+      
+  publish:
     docker:
-      - image: circleci/ruby:2.5-stretch-node
-        environment: *ruby_environment
-    <<: *install_ruby_dependencies
-
-  install-ruby2.4:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.4-stretch-node
-        environment: *ruby_environment
-    <<: *install_ruby_dependencies
-
-  build:
-    <<: *defaults
+      - image: circleci/openjdk:8u222-jdk-stretch-node-browsers
     steps:
-      - *attach_workspace
-      - *install_system_dependencies
-      - run: ./bin/rails assets:precompile
-      - persist_to_workspace:
-          root: ~/projects/
-          paths:
-              - ./mastodon/public/assets
-              - ./mastodon/public/packs-test/
-
-  test-ruby2.6:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.6-stretch-node
-        environment: *ruby_environment
-      - image: circleci/postgres:10.6-alpine
-        environment:
-          POSTGRES_USER: root
-      - image: circleci/redis:5-alpine
-    <<: *test_steps
-
-  test-ruby2.5:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.5-stretch-node
-        environment: *ruby_environment
-      - image: circleci/postgres:10.6-alpine
-        environment:
-          POSTGRES_USER: root
-      - image: circleci/redis:5-alpine
-    <<: *test_steps
-
-  test-ruby2.4:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.4-stretch-node
-        environment: *ruby_environment
-      - image: circleci/postgres:10.6-alpine
-        environment:
-          POSTGRES_USER: root
-      - image: circleci/redis:5-alpine
-    <<: *test_steps
-
-  test-webui:
-    <<: *defaults
-    docker:
-      - image: circleci/node:12.9-stretch
-    steps:
-      - *attach_workspace
-      - run: ./bin/retry yarn test:jest
-
-  check-i18n:
-    <<: *defaults
-    steps:
-      - *attach_workspace
-      - *install_system_dependencies
-      - run: bundle exec i18n-tasks check-normalized
-      - run: bundle exec i18n-tasks unused -l en
-      - run: bundle exec i18n-tasks check-consistent-interpolations
-      - run: bundle exec rake repo:check_locales_files
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - add_ssh_keys:
+          fingerprints: "SHA256:3NjaS3CruXShRtLGyu3cyF/Wp0zpmle2GlOz2NtoMRo"
+      - run:
+          name: Login to DockerHub
+          command: docker login -u $DOCKER_USER -p $DOCKER_PASS
+      - run: ./gradlew -Pprod bootJar jibDockerBuild
+      - run: docker tag junacards vinodplank/junacards:$CIRCLE_BUILD_NUM
+      - run: docker push vinodplank/junacards:$CIRCLE_BUILD_NUM
+      - run: ssh -o StrictHostKeyChecking=no ubuntu@13.235.249.241 "sed -i 's/juna-cards:[0-9][0-9]*/juna-cards:$CIRCLE_BUILD_NUM/g' ~/CircleCI/app.yml"
+      - run: ssh -o StrictHostKeyChecking=no ubuntu@13.235.249.241 "/bin/bash ~/CircleCI/deploy.sh"
 
 workflows:
   version: 2
-  build-and-test:
+  build_and_test:
     jobs:
-      - install
-      - install-ruby2.6:
+      - build
+      - test-java:
           requires:
-            - install
-      - install-ruby2.5:
-          requires:
-            - install
-            - install-ruby2.6
-      - install-ruby2.4:
-          requires:
-            - install
-            - install-ruby2.6
-      - build:
-          requires:
-            - install-ruby2.6
-      - test-ruby2.6:
-          requires:
-            - install-ruby2.6
             - build
-      - test-ruby2.5:
+      - test-yarn:
           requires:
-            - install-ruby2.5
             - build
-      - test-ruby2.4:
+      - publish:
           requires:
-            - install-ruby2.4
-            - build
-      - test-webui:
-          requires:
-            - install
-      - check-i18n:
-          requires:
-            - install-ruby2.6
+            - test-yarn
+          filters:
+            branches:
+              only: master
