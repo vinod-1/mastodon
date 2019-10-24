@@ -179,14 +179,9 @@ jobs:
       - run: bundle exec i18n-tasks check-consistent-interpolations
       - run: bundle exec rake repo:check_locales_files
   publish:
-  build:
     machine: true
   steps:
     - checkout
-    #- setup_remote_docker:
-    #    docker_layer_caching: true
-    #- add_ssh_keys:
-    #    fingerprints: "SHA256:3NjaS3CruXShRtLGyu3cyF/Wp0zpmle2GlOz2NtoMRo"
     - run:
         name: Login to DockerHub
         command: docker login -u $DOCKER_USER -p $DOCKER_PASS
