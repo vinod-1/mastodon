@@ -58,6 +58,7 @@ aliases:
         command: |
           sudo apt-get update
           sudo apt-get install -y libicu-dev libidn11-dev libprotobuf-dev protobuf-compiler
+
   - &install_ruby_dependencies
       steps:
         - *attach_workspace
@@ -101,14 +102,6 @@ jobs:
     <<: *defaults
     <<: *install_ruby_dependencies
 
-  install-ruby2.5:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.5-stretch-node
-        environment: *ruby_environment
-    <<: *install_ruby_dependencies
-
-
   build:
     <<: *defaults
     steps:
@@ -120,6 +113,18 @@ jobs:
           paths:
               - ./mastodon/public/assets
               - ./mastodon/public/packs-test/
+
+  test-ruby2.6:
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.6-stretch-node
+        environment: *ruby_environment
+      - image: circleci/postgres:10.6-alpine
+        environment:
+          POSTGRES_USER: root
+      - image: circleci/redis:5-alpine
+    <<: *test_steps
+
   check-i18n:
     <<: *defaults
     steps:
@@ -129,26 +134,34 @@ jobs:
       - run: bundle exec i18n-tasks unused -l en
       - run: bundle exec i18n-tasks check-consistent-interpolations
       - run: bundle exec rake repo:check_locales_files
-  machine:
-    services:
-      - docker
-  database:
-    override:
-      - echo "Skip database phase"
-  dependencies:
-    override:
-      - echo "Skip dependencies phase"
-  deployment:
-    master:
-      branch: master
-      commands:
-        - git clone --branch ${MASTODON_GIT_BRANCH:-master} ${MASTODON_GIT_URL:-https://github.com/tootsuite/mastodon.git}
-        - docker build --tag mastodon mastodon
-        - docker run --env SECRET_KEY_BASE=dummy --volume $(pwd)/mastodon/public/assets:/mastodon/public/assets --volume $(pwd)/mastodon/public/packs:/mastodon/public/packs mastodon bundle exec rake assets:precompile
-        - rm mastodon/.dockerignore
-        - docker build --tag ${AWS_ECR_URL}:${CIRCLE_BUILD_NUM} mastodon
-        - eval $(aws ecr get-login)
-        - docker push ${AWS_ECR_URL}:${CIRCLE_BUILD_NUM}
-  test:
-    override:
-      - echo "Skip test phase"
+  deploy:
+    commands:
+      - git clone --branch ${MASTODON_GIT_BRANCH:-master} ${MASTODON_GIT_URL:-https://github.com/tootsuite/mastodon.git}
+      - docker build --tag mastodon mastodon
+      - docker run --env SECRET_KEY_BASE=dummy --volume $(pwd)/mastodon/public/assets:/mastodon/public/assets --volume $(pwd)/mastodon/public/packs:/mastodon/public/packs mastodon bundle exec rake assets:precompile
+      - rm mastodon/.dockerignore
+      - docker build --tag ${CIRCLE_BUILD_NUM} mastodon
+#      - docker push ${AWS_ECR_URL}:${CIRCLE_BUILD_NUM}
+
+workflows:
+  version: 2
+  build-and-test:
+    jobs:
+      - install
+      - install-ruby2.6:
+          requires:
+            - install
+      - build:
+          requires:
+            - install-ruby2.6
+      - test-ruby2.6:
+          requires:
+            - install-ruby2.6
+            - build
+      - check-i18n:
+          requires:
+            - install-ruby2.6
+      - deploy:
+          requires:
+            - check-i18n
+
