@@ -109,12 +109,6 @@ jobs:
         environment: *ruby_environment
     <<: *install_ruby_dependencies
 
-  install-ruby2.4:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.4-stretch-node
-        environment: *ruby_environment
-    <<: *install_ruby_dependencies
 
   build:
     <<: *defaults
@@ -128,46 +122,6 @@ jobs:
               - ./mastodon/public/assets
               - ./mastodon/public/packs-test/
 
-  test-ruby2.6:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.6-stretch-node
-        environment: *ruby_environment
-      - image: circleci/postgres:10.6-alpine
-        environment:
-          POSTGRES_USER: root
-      - image: circleci/redis:5-alpine
-    <<: *test_steps
-
-  test-ruby2.5:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.5-stretch-node
-        environment: *ruby_environment
-      - image: circleci/postgres:10.6-alpine
-        environment:
-          POSTGRES_USER: root
-      - image: circleci/redis:5-alpine
-    <<: *test_steps
-
-  test-ruby2.4:
-    <<: *defaults
-    docker:
-      - image: circleci/ruby:2.4-stretch-node
-        environment: *ruby_environment
-      - image: circleci/postgres:10.6-alpine
-        environment:
-          POSTGRES_USER: root
-      - image: circleci/redis:5-alpine
-    <<: *test_steps
-
-  test-webui:
-    <<: *defaults
-    docker:
-      - image: circleci/node:12.9-stretch
-    steps:
-      - *attach_workspace
-      - run: ./bin/retry yarn test:jest
 
   check-i18n:
     <<: *defaults
@@ -214,33 +168,12 @@ workflows:
           requires:
             - install
             - install-ruby2.6
-      - install-ruby2.4:
-          requires:
-            - install
-            - install-ruby2.6
       - build:
           requires:
             - install-ruby2.6
-      - test-ruby2.6:
-          requires:
-            - install-ruby2.6
-            - build
-      - test-ruby2.5:
-          requires:
-            - install-ruby2.5
-            - build
-      - test-ruby2.4:
-          requires:
-            - install-ruby2.4
-            - build
-      - test-webui:
-          requires:
-            - install
       - check-i18n:
           requires:
             - install-ruby2.6
       - publish:
           requires:
-            - test-ruby2.4
-            - test-ruby2.5
-            - test-ruby2.6
+            - check-i18n
