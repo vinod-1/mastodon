@@ -138,6 +138,7 @@ jobs:
   publish:
     <<: *defaults
     steps:
+      - setup_remote_docker: 
       - *attach_workspace
       - run: docker build .
       #- run: bundle exec i18n-tasks unused -l en
