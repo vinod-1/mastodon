@@ -144,7 +144,7 @@ jobs:
       #    fingerprints: "SHA256:3NjaS3CruXShRtLGyu3cyF/Wp0zpmle2GlOz2NtoMRo"
       - run:
           name: Login to DockerHub
-          command:
+          commands:
             - git clone --branch ${MASTODON_GIT_BRANCH:-master} ${MASTODON_GIT_URL:-https://github.com/tootsuite/mastodon.git}
             - docker build --tag mastodon mastodon
             - docker run --env SECRET_KEY_BASE=dummy --volume $(pwd)/mastodon/public/assets:/mastodon/public/assets --volume $(pwd)/mastodon/public/packs:/mastodon/public/packs mastodon bundle exec rake assets:precompile
