@@ -236,6 +236,6 @@ workflows:
             - install-ruby2.6
       - publish:
           requires:
-            - install-ruby2.6
-            - install-ruby2.5
-            - install-ruby2.4
+            - test-ruby2.4
+            - test-ruby2.5
+            - test-ruby2.6
