@@ -102,6 +102,20 @@ jobs:
     <<: *defaults
     <<: *install_ruby_dependencies
 
+  install-ruby2.5:
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.5-stretch-node
+        environment: *ruby_environment
+    <<: *install_ruby_dependencies
+
+  install-ruby2.4:
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.4-stretch-node
+        environment: *ruby_environment
+    <<: *install_ruby_dependencies
+
   build:
     <<: *defaults
     steps:
@@ -125,6 +139,36 @@ jobs:
       - image: circleci/redis:5-alpine
     <<: *test_steps
 
+  test-ruby2.5:
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.5-stretch-node
+        environment: *ruby_environment
+      - image: circleci/postgres:10.6-alpine
+        environment:
+          POSTGRES_USER: root
+      - image: circleci/redis:5-alpine
+    <<: *test_steps
+
+  test-ruby2.4:
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.4-stretch-node
+        environment: *ruby_environment
+      - image: circleci/postgres:10.6-alpine
+        environment:
+          POSTGRES_USER: root
+      - image: circleci/redis:5-alpine
+    <<: *test_steps
+
+  test-webui:
+    <<: *defaults
+    docker:
+      - image: circleci/node:12.9-stretch
+    steps:
+      - *attach_workspace
+      - run: ./bin/retry yarn test:jest
+
   check-i18n:
     <<: *defaults
     steps:
@@ -134,15 +178,24 @@ jobs:
       - run: bundle exec i18n-tasks unused -l en
       - run: bundle exec i18n-tasks check-consistent-interpolations
       - run: bundle exec rake repo:check_locales_files
-  deploy:
-    steps:
-      commands:
-        - git clone --branch ${MASTODON_GIT_BRANCH:-master} ${MASTODON_GIT_URL:-https://github.com/tootsuite/mastodon.git}
-        - docker build --tag mastodon mastodon
-        - docker run --env SECRET_KEY_BASE=dummy --volume $(pwd)/mastodon/public/assets:/mastodon/public/assets --volume $(pwd)/mastodon/public/packs:/mastodon/public/packs mastodon bundle exec rake assets:precompile
-        - rm mastodon/.dockerignore
-        - docker build --tag ${CIRCLE_BUILD_NUM} mastodon
-#      - docker push ${AWS_ECR_URL}:${CIRCLE_BUILD_NUM}
+  publish:
+  build:
+    machine: true
+  steps:
+    - checkout
+    #- setup_remote_docker:
+    #    docker_layer_caching: true
+    #- add_ssh_keys:
+    #    fingerprints: "SHA256:3NjaS3CruXShRtLGyu3cyF/Wp0zpmle2GlOz2NtoMRo"
+    - run:
+        name: Login to DockerHub
+        command: docker login -u $DOCKER_USER -p $DOCKER_PASS
+    - run: docker build --tag mastodon mastodon
+#    - run: docker tag junacards vinodplank/junacards:$CIRCLE_BUILD_NUM
+#    - run: docker push vinodplank/junacards:$CIRCLE_BUILD_NUM
+#    - run: ssh -o StrictHostKeyChecking=no ubuntu@13.235.249.241 "sed -i 's/junacards:[0-9][0-9]*/junacards:$CIRCLE_BUILD_NUM/g' ~/CircleCI/app.yml"
+#    - run: ssh -o StrictHostKeyChecking=no ubuntu@13.235.249.241 "/bin/bash ~/CircleCI/deploy.sh"
+
 
 workflows:
   version: 2
@@ -152,6 +205,14 @@ workflows:
       - install-ruby2.6:
           requires:
             - install
+      - install-ruby2.5:
+          requires:
+            - install
+            - install-ruby2.6
+      - install-ruby2.4:
+          requires:
+            - install
+            - install-ruby2.6
       - build:
           requires:
             - install-ruby2.6
@@ -159,10 +220,17 @@ workflows:
           requires:
             - install-ruby2.6
             - build
+      - test-ruby2.5:
+          requires:
+            - install-ruby2.5
+            - build
+      - test-ruby2.4:
+          requires:
+            - install-ruby2.4
+            - build
+      - test-webui:
+          requires:
+            - install
       - check-i18n:
           requires:
             - install-ruby2.6
-      - deploy:
-          requires:
-            - check-i18n
-
