@@ -190,8 +190,13 @@ jobs:
       #    fingerprints: "SHA256:3NjaS3CruXShRtLGyu3cyF/Wp0zpmle2GlOz2NtoMRo"
       - run:
           name: Login to DockerHub
-          command: docker login -u $DOCKER_USER -p $DOCKER_PASS
-      - run: docker build . 
+          command:
+            - git clone --branch ${MASTODON_GIT_BRANCH:-master} ${MASTODON_GIT_URL:-https://github.com/tootsuite/mastodon.git}
+            - docker build --tag mastodon mastodon
+            - docker run --env SECRET_KEY_BASE=dummy --volume $(pwd)/mastodon/public/assets:/mastodon/public/assets --volume $(pwd)/mastodon/public/packs:/mastodon/public/packs mastodon bundle exec rake assets:precompile
+            - rm mastodon/.dockerignore
+            - docker build --tag :${CIRCLE_BUILD_NUM} mastodon
+      #- run: docker build . 
       #- run: docker tag junacards vinodplank/junacards:$CIRCLE_BUILD_NUM
       #- run: docker push vinodplank/junacards:$CIRCLE_BUILD_NUM
       #- run: ssh -o StrictHostKeyChecking=no ubuntu@13.235.249.241 "sed -i 's/junacards:[0-9][0-9]*/junacards:$CIRCLE_BUILD_NUM/g' ~/CircleCI/app.yml"
