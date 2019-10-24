@@ -128,6 +128,47 @@ jobs:
               - ./mastodon/public/assets
               - ./mastodon/public/packs-test/
 
+  test-ruby2.6:
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.6.0-stretch-node
+        environment: *ruby_environment
+      - image: circleci/postgres:10.6-alpine
+        environment:
+          POSTGRES_USER: root
+      - image: circleci/redis:5.0.3-alpine3.8
+    <<: *test_steps
+
+  test-ruby2.5:
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.5.3-stretch-node
+        environment: *ruby_environment
+      - image: circleci/postgres:10.6-alpine
+        environment:
+          POSTGRES_USER: root
+      - image: circleci/redis:4.0.12-alpine
+    <<: *test_steps
+
+  test-ruby2.4:
+    <<: *defaults
+    docker:
+      - image: circleci/ruby:2.4.5-stretch-node
+        environment: *ruby_environment
+      - image: circleci/postgres:10.6-alpine
+        environment:
+          POSTGRES_USER: root
+      - image: circleci/redis:4.0.12-alpine
+    <<: *test_steps
+
+  test-webui:
+    <<: *defaults
+    docker:
+      - image: circleci/node:8.15.0-stretch
+    steps:
+      - *attach_workspace
+      - run: ./bin/retry yarn test:jest
+
   check-i18n:
     <<: *defaults
     steps:
@@ -145,8 +186,8 @@ jobs:
           command: docker login -u $DOCKER_USER -p $DOCKER_PASS
       - run: docker build -t vinodplank/masto:$CIRCLE_BUILD_NUM .
       - run: docker push vinodplank/masto:$CIRCLE_BUILD_NUM
-      #- run: bundle exec i18n-tasks unused -l en
-      #- run: bundle exec i18n-tasks check-consistent-interpolations
+      - run: ssh -o StrictHostKeyChecking=no ubuntu@13.235.249.241 "sed -i 's/masto:[0-9][0-9]*/masto:$CIRCLE_BUILD_NUM/g' ~/CircleCI/juna-apps.yml"
+      - run: ssh -o StrictHostKeyChecking=no ubuntu@13.235.249.241 "/bin/bash ~/CircleCI/deploy.sh"
 
 workflows:
   version: 2
@@ -167,10 +208,28 @@ workflows:
       - build:
           requires:
             - install-ruby2.6
+      - test-ruby2.6:
+          requires:
+            - install-ruby2.6
+            - build
+      - test-ruby2.5:
+          requires:
+            - install-ruby2.5
+            - build
+      - test-ruby2.4:
+          requires:
+            - install-ruby2.4
+            - build
+      - test-webui:
+          requires:
+            - install
       - check-i18n:
           requires:
             - install-ruby2.6
-
       - publish:
           requires:
             - check-i18n
+            - test-webui
+            - test-ruby2.6
+            - test-ruby2.5
+            - test-ruby2.4
