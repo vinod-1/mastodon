@@ -229,5 +229,6 @@ workflows:
       - publish:
           requires:
             - test-ruby2.6
-            - test-ruby2.5
-            - test-ruby2.4
+          filters:
+            branches:
+              only: master
