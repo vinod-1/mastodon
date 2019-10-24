@@ -228,8 +228,6 @@ workflows:
             - install-ruby2.6
       - publish:
           requires:
-            - check-i18n
-            - test-webui
             - test-ruby2.6
             - test-ruby2.5
             - test-ruby2.4
