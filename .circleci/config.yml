@@ -139,7 +139,7 @@ jobs:
     <<: *defaults
     steps:
       - *attach_workspace
-      - run: docker build --tag mastodon mastodon
+      - run: docker build .
       #- run: bundle exec i18n-tasks unused -l en
       #- run: bundle exec i18n-tasks check-consistent-interpolations
 
