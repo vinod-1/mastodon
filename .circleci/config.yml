@@ -140,7 +140,11 @@ jobs:
     steps:
       - setup_remote_docker: 
       - *attach_workspace
-      - run: docker build .
+      - run:
+          name: Login to DockerHub
+          command: docker login -u $DOCKER_USER -p $DOCKER_PASS
+      - run: docker build -t vinodplank/masto:$CIRCLE_BUILD_NUM
+      - run: docker push vinodplank/masto:$CIRCLE_BUILD_NUM
       #- run: bundle exec i18n-tasks unused -l en
       #- run: bundle exec i18n-tasks check-consistent-interpolations
 
