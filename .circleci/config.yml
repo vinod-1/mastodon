@@ -142,14 +142,11 @@ jobs:
       #    docker_layer_caching: true
       #- add_ssh_keys:
       #    fingerprints: "SHA256:3NjaS3CruXShRtLGyu3cyF/Wp0zpmle2GlOz2NtoMRo"
-      - run:
-          name: Login to DockerHub
-          commands:
-            - git clone --branch ${MASTODON_GIT_BRANCH:-master} ${MASTODON_GIT_URL:-https://github.com/tootsuite/mastodon.git}
-            - docker build --tag mastodon mastodon
-            - docker run --env SECRET_KEY_BASE=dummy --volume $(pwd)/mastodon/public/assets:/mastodon/public/assets --volume $(pwd)/mastodon/public/packs:/mastodon/public/packs mastodon bundle exec rake assets:precompile
-            - rm mastodon/.dockerignore
-            - docker build --tag :${CIRCLE_BUILD_NUM} mastodon
+      - run: git clone --branch ${MASTODON_GIT_BRANCH:-master} ${MASTODON_GIT_URL:-https://github.com/tootsuite/mastodon.git}
+      - run: docker build --tag mastodon mastodon
+      - run: docker run --env SECRET_KEY_BASE=dummy --volume $(pwd)/mastodon/public/assets:/mastodon/public/assets --volume $(pwd)/mastodon/public/packs:/mastodon/public/packs mastodon bundle exec rake assets:precompile
+      - run: rm mastodon/.dockerignore
+      - run: docker build --tag :${CIRCLE_BUILD_NUM} mastodon
       #- run: docker build . 
       #- run: docker tag junacards vinodplank/junacards:$CIRCLE_BUILD_NUM
       #- run: docker push vinodplank/junacards:$CIRCLE_BUILD_NUM
